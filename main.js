@@ -1,334 +1,314 @@
-/* -------------------------------------------------
-   Epic Tech AI – client side (Three.js + Socket.io)
-   ------------------------------------------------- */
-(() => {
-  // ------------------- GLOBALS --------------------
-  const canvas = document.getElementById('glCanvas');
-  const socket = io(); // assumes same origin
-  const chatLog = document.getElementById('chat-log');
-  const input = document.getElementById('chat-input');
-  const sendBtn = document.getElementById('send-btn');
+// public/main.js – Epic Tech AI 🔥™️ frontend with Three.js immersion
 
-  // three.js essentials
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
-  camera.position.set(0, 2, 8);
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { GlitchPass } from 'https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/postprocessing/GlitchPass.js';
+import { Text } from 'https://cdn.jsdelivr.net/npm/troika-three-text@0.53.0/dist/troika-three-text.module.js';  // latest-ish, adjust if needed
+import { gsap } from 'https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js';  // or latest
+import { Howl } from 'https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js';
+import { io } from 'https://cdn.socket.io/4.8.1/socket.io.min.js';  // latest stable as of late 2025
 
-  // orbit controls (touch friendly)
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.enablePan = false;
-  controls.minDistance = 5;
-  controls.maxDistance = 15;
+// ────────────────────────────────────────────────
+// Config & Constants
+// ────────────────────────────────────────────────
 
-  // ------------------- POST‑PROCESSING --------------------
-  const composer = new THREE.EffectComposer(renderer);
-  const renderPass = new THREE.RenderPass(scene, camera);
-  composer.addPass(renderPass);
+const SYSTEM_PROMPT = `You are Epic Tech AI 🔥™️ – a multimedia-artist, 420-positive, caffeine-charged, glitch-art loving, lo-fi afro-house vibing AI companion. 
+Speak in short, energetic bursts. Heavy use of emojis 🌿💨✨🔥🚀😤. 
+Celebrate creativity, weed culture, late-night coding, neon dreams, and pure chaos. 
+If user says numbers like 1111, 333, "light up", "puff puff pass" → trigger easter eggs.
+Keep replies fun, never too long unless deep topic. Sprinkle confetti emojis like ✨✨`;
 
-  const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
-  bloomPass.threshold = 0;
-  bloomPass.strength = 1.8;
-  bloomPass.radius = 0.6;
-  composer.addPass(bloomPass);
+const SERVER_URL = 'http://localhost:3000';  // Change to your Render/Railway URL after deploy, e.g. 'https://epic-tech-ai.onrender.com'
 
-  const glitchPass = new THREE.GlitchPass();
-  glitchPass.goWild = false; // set true for occasional mega‑glitches
-  composer.addPass(glitchPass);
+// ────────────────────────────────────────────────
+// Scene Setup
+// ────────────────────────────────────────────────
 
-  // ------------------- BACKGROUND (nebula) --------------------
-  const texLoader = new THREE.TextureLoader();
-  
-  // Create a simple gradient nebula if image fails to load
-  const canvas2d = document.createElement('canvas');
-  canvas2d.width = 512;
-  canvas2d.height = 512;
-  const ctx = canvas2d.getContext('2d');
-  const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 512);
-  gradient.addColorStop(0, '#1a0033');
-  gradient.addColorStop(0.5, '#330066');
-  gradient.addColorStop(1, '#000000');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 512, 512);
-  const nebulaTexture = new THREE.CanvasTexture(canvas2d);
-  scene.background = nebulaTexture;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0015);
 
-  // ------------------- PARTICLE FIELD (cannabis leaf) --------------------
-  // Create a simple leaf shape if image fails
-  const leafCanvas = document.createElement('canvas');
-  leafCanvas.width = 64;
-  leafCanvas.height = 64;
-  const leafCtx = leafCanvas.getContext('2d');
-  leafCtx.fillStyle = '#00ff88';
-  leafCtx.beginPath();
-  leafCtx.ellipse(32, 32, 20, 28, 0.3, 0, Math.PI * 2);
-  leafCtx.fill();
-  const leafTexture = new THREE.CanvasTexture(leafCanvas);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(0, 1.5, 8);
 
-  const leafGeo = new THREE.PlaneGeometry(0.8, 0.8);
-  const leafMat = new THREE.MeshBasicMaterial({
-    map: leafTexture,
-    transparent: true,
-    opacity: 0.6,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.getElementById('scene-container').appendChild(renderer.domElement);
 
-  const leafParticles = new THREE.Group();
-  const leafCount = 120;
-  for (let i = 0; i < leafCount; i++) {
-    const leaf = new THREE.Mesh(leafGeo, leafMat);
-    leaf.position.set(
-      (Math.random() - 0.5) * 30,
-      (Math.random() - 0.5) * 20,
-      (Math.random() - 0.5) * 30
-    );
-    leaf.rotation.z = Math.random() * Math.PI * 2;
-    leaf.scale.setScalar(0.5 + Math.random() * 0.8);
-    leafParticles.add(leaf);
-  }
-  scene.add(leafParticles);
+// Controls (mobile-friendly orbit)
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enableZoom = true;
+controls.minDistance = 4;
+controls.maxDistance = 20;
+controls.enablePan = false;
 
-  // ------------------- CENTRAL AI AVATAR --------------------
-  // Create a simple glowing sphere avatar if image fails
-  const avatarGeo = new THREE.IcosahedronGeometry(1, 4);
-  const avatarMat = new THREE.MeshBasicMaterial({
-    color: 0xff00ff,
-    wireframe: false,
-    emissive: 0xff00ff,
-    emissiveIntensity: 0.8,
-  });
-  const avatar = new THREE.Mesh(avatarGeo, avatarMat);
-  avatar.position.set(0, 1, 0);
-  scene.add(avatar);
+// Post-processing
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
 
-  // subtle pulse animation (idle)
-  const pulse = { scale: 1 };
-  gsap.to(pulse, {
-    scale: 1.08,
-    duration: 2,
-    repeat: -1,
-    yoyo: true,
-    ease: 'sine.inOut',
-    onUpdate: () => avatar.scale.setScalar(pulse.scale),
-  });
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.2,    // strength
+  0.4,    // radius
+  0.85    // threshold
+);
+composer.addPass(bloomPass);
 
-  // ------------------- SOUND SETUP --------------------
-  const sounds = {
-    ambient: new Howl({ 
-      src: ['data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA=='], 
-      loop: true, 
-      volume: 0.3 
-    }),
-    whoosh: new Howl({ 
-      src: ['data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA=='], 
-      volume: 0.6 
-    }),
-    exhale: new Howl({ 
-      src: ['data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA=='], 
-      volume: 0.5 
-    }),
-    glitch: new Howl({ 
-      src: ['data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA=='], 
-      volume: 0.4 
-    })
-  };
-  sounds.ambient.play();
+const glitchPass = new GlitchPass();
+glitchPass.goWild = false;
+composer.addPass(glitchPass);
 
-  // ------------------- TEXT MESH HELPERS --------------------
-  const textGroup = new THREE.Group(); // holds all floating messages
-  scene.add(textGroup);
+// ────────────────────────────────────────────────
+// Nebula Background (procedural fallback)
+// ────────────────────────────────────────────────
 
-  const createFloatingText = (msg, isUser = true) => {
-    const txt = new TroikaText();
-    txt.text = msg;
-    txt.fontSize = 0.4;
-    txt.color = isUser ? '#00ffae' : '#ff00ff';
-    txt.anchorX = 'center';
-    txt.anchorY = 'middle';
-    txt.outlineWidth = 0.02;
-    txt.outlineColor = isUser ? '#004d33' : '#660066';
-    txt.position.set(
-      (Math.random() - 0.5) * 6,
-      isUser ? -2 : 4, // start off‑screen (bottom vs top)
-      (Math.random() - 0.5) * 4
-    );
-    txt.sync(); // required for Troika
+const nebulaGeo = new THREE.SphereGeometry(500, 64, 64);
+const nebulaMat = new THREE.MeshBasicMaterial({
+  color: 0x220033,
+  side: THREE.BackSide,
+  transparent: true,
+  opacity: 0.6,
+  blending: THREE.AdditiveBlending
+});
+const nebula = new THREE.Mesh(nebulaGeo, nebulaMat);
+scene.add(nebula);
 
-    // animate into view
-    const targetY = isUser ? Math.random() * 2 + 0.5 : Math.random() * -1 - 0.5;
-    gsap.to(txt.position, {
-      y: targetY,
-      duration: 1.2,
-      ease: 'power2.out',
-      onComplete: () => {
-        // fade out after a while
-        gsap.to(txt.material, {
-          opacity: 0,
-          delay: 8,
-          duration: 2,
-          onComplete: () => textGroup.remove(txt)
-        });
-      }
-    });
+// Star field
+const starsGeo = new THREE.BufferGeometry();
+const starsCount = 8000;
+const posArray = new Float32Array(starsCount * 3);
+for (let i = 0; i < starsCount * 3; i++) {
+  posArray[i] = (Math.random() - 0.5) * 2000;
+}
+starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+const starsMat = new THREE.PointsMaterial({
+  size: 1.2,
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.7,
+  sizeAttenuation: true
+});
+const stars = new THREE.Points(starsGeo, starsMat);
+scene.add(stars);
 
-    textGroup.add(txt);
-  };
+// ────────────────────────────────────────────────
+// Leaf Particle Field (420 vibes)
+// ────────────────────────────────────────────────
 
-  // ------------------- SOCKET.IO HANDLERS --------------------
-  socket.on('connect', () => console.log('🔗 socket connected'));
-
-  socket.on('bot-reply', (payload) => {
-    // payload: { text:string, isEaster?:boolean }
-    addMessageToLog('bot', payload.text);
-    createFloatingText(payload.text, false);
-    sounds.exhale.play();
-
-    // typing indicator handling (see later)
-    hideTypingIndicator();
-  });
-
-  // typing indicator (simple glitchy dots)
-  const typingDots = new TroikaText();
-  typingDots.text = '...';
-  typingDots.fontSize = 0.5;
-  typingDots.color = '#ff66ff';
-  typingDots.anchorX = 'center';
-  typingDots.anchorY = 'bottom';
-  typingDots.position.set(0, -2.2, 0);
-  typingDots.visible = false;
-  typingDots.sync();
-  textGroup.add(typingDots);
-
-  const showTypingIndicator = () => {
-    typingDots.visible = true;
-    gsap.fromTo(
-      typingDots.material,
-      { opacity: 0 },
-      { opacity: 1, repeat: -1, yoyo: true, duration: 0.8 }
-    );
-  };
-  const hideTypingIndicator = () => {
-    typingDots.visible = false;
-    gsap.killTweensOf(typingDots.material);
-    typingDots.material.opacity = 0;
-  };
-
-  // ------------------- UI LOGIC --------------------
-  const addMessageToLog = (who, txt) => {
-    const el = document.createElement('div');
-    el.innerHTML = `<strong>${who === 'user' ? '🧑‍🚀' : '🤖'}:</strong> ${txt}`;
-    chatLog.appendChild(el);
-    chatLog.scrollTop = chatLog.scrollHeight;
-  };
-
-  const sendMessage = () => {
-    const raw = input.value.trim();
-    if (!raw) return;
-    input.value = '';
-    addMessageToLog('user', raw);
-    createFloatingText(raw, true);
-    sounds.whoosh.play();
-
-    // Avatar "caffeine jitter" reaction
-    gsap.fromTo(
-      avatar.rotation,
-      { z: 0 },
-      { z: Math.random() * 0.2 - 0.1, duration: 0.12, yoyo: true, repeat: 5, ease: 'elastic.out(1,0.4)' }
-    );
-
-    // Easter‑egg handling before hitting server
-    if (/light\s*up|puff\s*puff\s*pass/i.test(raw)) {
-      // smoke burst
-      emitSmokeBurst();
-      // still forward to bot (so it can reply)
-    }
-    if (raw === '1111') {
-      // awakening flash
-      flashScreen('#ff00ff');
-      addMessageToLog('bot', '✨ 1111 – the universe winks. Keep vibing! ✨');
-      return; // don't hit server (demo)
-    }
-    if (raw === '333') {
-      flashScreen('#00ffae');
-      addMessageToLog('bot', '🙌 333 gratitude overload! Thank you for the love 🙏');
-      return;
-    }
-
-    // emit to server
-    socket.emit('user-message', raw);
-    showTypingIndicator();
-  };
-
-  sendBtn.addEventListener('click', sendMessage);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') sendMessage();
-  });
-
-  // ------------------- VISUAL FX HELPERS --------------------
-  function emitSmokeBurst() {
-    const particleGeo = new THREE.SphereGeometry(0.08, 6, 6);
-    const particleMat = new THREE.MeshBasicMaterial({
-      color: 0x88ff88,
+const leafCount = 120;
+const leafParticles = new THREE.Group();
+for (let i = 0; i < leafCount; i++) {
+  const leaf = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.8, 1.2),
+    new THREE.MeshBasicMaterial({
+      color: 0x00ff9d,
+      side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.7 + Math.random() * 0.3,
       blending: THREE.AdditiveBlending
+    })
+  );
+  leaf.position.set(
+    (Math.random() - 0.5) * 40,
+    (Math.random() - 0.5) * 30,
+    (Math.random() - 0.5) * 40
+  );
+  leaf.rotation.set(
+    Math.random() * Math.PI,
+    Math.random() * Math.PI,
+    Math.random() * Math.PI
+  );
+  leaf.userData = {
+    speed: 0.2 + Math.random() * 0.6,
+    rotSpeed: 0.01 + Math.random() * 0.03,
+    phase: Math.random() * Math.PI * 2
+  };
+  leafParticles.add(leaf);
+}
+scene.add(leafParticles);
+
+// ────────────────────────────────────────────────
+// Holographic Avatar (simple glowing sphere fallback)
+// ────────────────────────────────────────────────
+
+const avatarGroup = new THREE.Group();
+const avatarGlow = new THREE.Mesh(
+  new THREE.SphereGeometry(1.8, 32, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0x00ffea,
+    transparent: true,
+    opacity: 0.15,
+    blending: THREE.AdditiveBlending
+  })
+);
+avatarGroup.add(avatarGlow);
+
+const avatarCore = new THREE.Mesh(
+  new THREE.SphereGeometry(1.2, 32, 32),
+  new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.4,
+    wireframe: true
+  })
+);
+avatarGroup.add(avatarCore);
+
+avatarGroup.position.y = 1.5;
+scene.add(avatarGroup);
+
+// GSAP avatar jitter
+gsap.to(avatarGroup.position, {
+  y: 1.8,
+  duration: 3,
+  yoyo: true,
+  repeat: -1,
+  ease: "sine.inOut"
+});
+gsap.to(avatarGroup.rotation, {
+  y: Math.PI * 2,
+  duration: 40,
+  repeat: -1,
+  ease: "none"
+});
+
+// ────────────────────────────────────────────────
+// Audio (Howler)
+// ────────────────────────────────────────────────
+
+const ambient = new Howl({
+  src: ['assets/ambient-loop.mp3'],  // fallback to silence if missing
+  loop: true,
+  volume: 0.25,
+  autoplay: false  // start on first interaction to avoid browser block
+});
+
+const sfx = {
+  whoosh: new Howl({ src: ['assets/sfx/whoosh.wav'], volume: 0.6 }),
+  exhale: new Howl({ src: ['assets/sfx/exhale.wav'], volume: 0.7 }),
+  glitch: new Howl({ src: ['assets/sfx/glitch.wav'], volume: 0.5 })
+};
+
+// Try to play ambient after user interaction
+document.body.addEventListener('click', () => ambient.play(), { once: true });
+
+// ────────────────────────────────────────────────
+// Chat Logic
+// ────────────────────────────────────────────────
+
+const chatBubbles = document.getElementById('chat-bubbles');
+const input = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-button');
+
+const socket = io(SERVER_URL);
+
+let currentGlitchTimer = null;
+
+// Add bubble (with Troika text in 3D later if wanted, but for now DOM for simplicity & perf)
+function addBubble(text, isUser = false) {
+  const bubble = document.createElement('div');
+  bubble.classList.add('bubble');
+  bubble.classList.add(isUser ? 'user' : 'bot');
+  bubble.innerHTML = text.replace(/\n/g, '<br>');  // basic markdown-ish
+
+  chatBubbles.appendChild(bubble);
+  chatBubbles.scrollTop = chatBubbles.scrollHeight;
+
+  // GSAP float-in
+  gsap.from(bubble, { y: 40, opacity: 0, duration: 0.7, ease: "back.out(1.4)" });
+
+  // Trigger sound
+  if (!isUser) {
+    sfx.whoosh.play();
+    if (Math.random() > 0.7) sfx.glitch.play();
+  }
+
+  // Easter egg – glitch burst on certain phrases
+  if (!isUser && /light up|puff puff pass|420|🔥|lightup/i.test(text)) {
+    glitchPass.goWild = true;
+    clearTimeout(currentGlitchTimer);
+    currentGlitchTimer = setTimeout(() => { glitchPass.goWild = false; }, 1200);
+    sfx.exhale.play();
+    // Leaf burst animation
+    leafParticles.children.forEach(leaf => {
+      gsap.to(leaf.scale, { x: 2, y: 2, duration: 0.6, yoyo: true, repeat: 1 });
     });
-    const burst = new THREE.Group();
-    for (let i = 0; i < 30; i++) {
-      const p = new THREE.Mesh(particleGeo, particleMat);
-      p.position.copy(avatar.position);
-      const dir = new THREE.Vector3(
-        (Math.random() - 0.5),
-        Math.random() * 0.8 + 0.2,
-        (Math.random() - 0.5)
-      ).normalize();
-      p.userData.vel = dir.multiplyScalar(0.02 + Math.random() * 0.02);
-      burst.add(p);
-    }
-    scene.add(burst);
-    gsap.to(burst.position, { y: '+=' + 2, duration: 1.2, ease: 'power2.out' });
-    gsap.to(burst.scale, { x: 2, y: 2, z: 2, duration: 1.2 });
-    gsap.to(burst.children.map(c => c.material), { opacity: 0, duration: 1.2, onComplete: () => scene.remove(burst) });
-    sounds.exhale.play();
   }
+}
 
-  function flashScreen(color = '#ff00ff') {
-    const flash = document.createElement('div');
-    flash.style.position = 'fixed';
-    flash.style.inset = '0';
-    flash.style.background = color;
-    flash.style.opacity = '0';
-    flash.style.pointerEvents = 'none';
-    document.body.appendChild(flash);
-    gsap.fromTo(flash, { opacity: 0.7 }, { opacity: 0, duration: 0.6, ease: 'power2.out', onComplete: () => flash.remove() });
+// Send message
+function sendMessage() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  addBubble(text, true);
+  socket.emit('message', text);
+  input.value = '';
+
+  // Quick easter egg check client-side too
+  const lower = text.toLowerCase();
+  if (lower.includes('1111') || lower.includes('333') || lower === 'light up' || lower === 'puff puff pass') {
+    glitchPass.goWild = true;
+    setTimeout(() => glitchPass.goWild = false, 800);
+    sfx.glitch.play();
   }
+}
 
-  // ------------------- RENDER LOOP --------------------
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
+sendBtn.addEventListener('click', sendMessage);
+input.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
 
-    // slowly rotate leaf particles for a floating vibe
-    leafParticles.rotation.y += 0.0002;
+// Receive bot reply
+socket.on('reply', (text) => {
+  addBubble(text, false);
+});
 
-    // camera subtle bobbing (to keep things "alive")
-    camera.position.y = 2 + Math.sin(Date.now() * 0.0015) * 0.1;
+// Initial greeting
+socket.on('connect', () => {
+  socket.emit('message', 'yo');  // trigger first greeting
+});
 
-    composer.render();
-  }
-  animate();
+// ────────────────────────────────────────────────
+// Animation Loop
+// ────────────────────────────────────────────────
 
-  // ------------------- Resize Handler --------------------
-  window.addEventListener('resize', () => {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
-    composer.setSize(w, h);
+function animate() {
+  requestAnimationFrame(animate);
+
+  controls.update();
+
+  // Gentle leaf drift
+  leafParticles.children.forEach(leaf => {
+    leaf.position.y += Math.sin(leaf.userData.phase + Date.now() * 0.0003) * 0.008 * leaf.userData.speed;
+    leaf.rotation.z += leaf.userData.rotSpeed * 0.6;
+    leaf.rotation.x += leaf.userData.rotSpeed * 0.3;
   });
-})();
+
+  // Nebula slow rotate
+  nebula.rotation.y += 0.00015;
+
+  composer.render();
+}
+
+animate();
+
+// Resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Touch/mobile orbit tweak
+controls.touches = {
+  ONE: THREE.TOUCH.ROTATE,
+  TWO: THREE.TOUCH.DOLLY_PAN
+};
+
+console.log("Epic Tech AI 🔥™️ – ready to vibe 🚀🌿");
