@@ -1,0 +1,21 @@
+{
+  "name": "epic-tech-ai",
+  "version": "1.0.0",
+  "description": "Multimedia-artist AI chat-bot with 420-positive, caffeine-charged vibe 🔥™️",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Epic Tech AI 🔥™️",
+  "license": "MIT"
+}
