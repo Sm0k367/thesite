@@ -1,0 +1,35 @@
+# Node / npm
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json   # optional – if you prefer lockfile, remove this line
+yarn.lock
+
+# Env & secrets
+.env
+server/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel / build artifacts
+.vercel
+.output
+dist/
+build/
+
+# Logs & temp
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Misc
+public/assets/*.mp3   # ignore large audio if you add real files later (or commit small ones)
+public/assets/*.wav
